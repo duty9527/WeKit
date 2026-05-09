@@ -33,11 +33,10 @@ import org.mozilla.javascript.ScriptableObject
 import org.mozilla.javascript.Undefined
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.absolutePathString
-import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.div
 import kotlin.io.path.exists
@@ -66,6 +65,7 @@ object JsApiExposer {
         exposeStorageApis(scope)
         exposeDateTimeApis(scope)
         exposeXposedApis(scope)
+        exposeTaskApis(scope)
         exposeWeChatApis(scope, talker)
     }
 
@@ -165,7 +165,7 @@ object JsApiExposer {
                             )
                             cacheDir.deleteRecursively()
                         }
-                        cacheDir.createDirectories()
+                        cacheDir.createDirectoriesNoThrow()
 
                         val destFile = cacheDir.resolve(filename)
 
@@ -433,7 +433,6 @@ object JsApiExposer {
     private fun exposeDateTimeApis(scope: ScriptableObject) {
         val dtObj = NativeObject()
 
-        // time.sleepS(seconds)
         ScriptableObject.putProperty(
             dtObj, "sleepS",
             object : BaseFunction() {
@@ -448,7 +447,7 @@ object JsApiExposer {
                         try {
                             Thread.sleep(seconds * 1000)
                         } catch (e: InterruptedException) {
-                            WeLogger.w(TAG_LOG_API, "Sleep interrupted", e)
+                            WeLogger.w(TAG_LOG_API, "datetime.sleep interrupted", e)
                             Thread.currentThread().interrupt()
                         }
                     }
@@ -457,7 +456,6 @@ object JsApiExposer {
             }
         )
 
-        // time.sleepMs(milliseconds)
         ScriptableObject.putProperty(
             dtObj, "sleepMs",
             object : BaseFunction() {
@@ -472,7 +470,7 @@ object JsApiExposer {
                         try {
                             Thread.sleep(ms)
                         } catch (e: InterruptedException) {
-                            WeLogger.w(TAG_LOG_API, "Sleep interrupted", e)
+                            WeLogger.w(TAG_LOG_API, "datetime.sleep interrupted", e)
                             Thread.currentThread().interrupt()
                         }
                     }
@@ -481,7 +479,6 @@ object JsApiExposer {
             }
         )
 
-        // time.getCurrentUnixEpoch()
         ScriptableObject.putProperty(
             dtObj, "getCurrentUnixEpoch",
             object : BaseFunction() {
@@ -818,29 +815,25 @@ object JsApiExposer {
                     args: Array<Any?>
                 ): Any? {
                     val uri = args.getOrNull(0)?.toString() ?: return Undefined.instance
-                    val cgiId = (args.getOrNull(1) as? Int) ?: return Undefined.instance
-                    val funcId = (args.getOrNull(2) as? Int) ?: return Undefined.instance
-                    val routeId = (args.getOrNull(3) as? Int) ?: return Undefined.instance
+                    val cgiId = (args.getOrNull(1) as? Number)?.toInt() ?: return Undefined.instance
+                    val funcId = (args.getOrNull(2) as? Number)?.toInt() ?: return Undefined.instance
+                    val routeId = (args.getOrNull(3) as? Number)?.toInt() ?: return Undefined.instance
                     val jsonPayload = args.getOrNull(4)?.toString() ?: return Undefined.instance
-
-                    var result: String? = null
-                    val latch = CountDownLatch(1)
+                    val onSuccess = args.getOrNull(5) as? org.mozilla.javascript.Function ?: return Undefined.instance
+                    val onFailure = args.getOrNull(6) as? org.mozilla.javascript.Function ?: return Undefined.instance
 
                     WePacketHelper.sendCgi(
                         uri, cgiId, funcId, routeId, jsonPayload
                     ) {
                         onSuccess { json, _ ->
-                            result = json
-                            latch.countDown()
+                            onSuccess.call(cx, scope, thisObj, arrayOf(json))
                         }
                         onFailure { _, _, errMsg ->
-                            result = errMsg
-                            latch.countDown()
+                            onFailure.call(cx, scope, thisObj, arrayOf(errMsg))
                         }
                     }
 
-                    latch.await()
-                    return result
+                    return Undefined.instance
                 }
             }
         )
@@ -980,7 +973,7 @@ object JsApiExposer {
                             }
                         }
                     } catch (e: Exception) {
-                        WeLogger.e(TAG_XPOSED_API, "xposed.before failed", e)
+                        WeLogger.e(TAG_XPOSED_API, "xposed.hookBefore failed", e)
                     }
                     return Undefined.instance
                 }
@@ -1019,7 +1012,7 @@ object JsApiExposer {
                             }
                         }
                     } catch (e: Exception) {
-                        WeLogger.e(TAG_XPOSED_API, "xposed.after failed", e)
+                        WeLogger.e(TAG_XPOSED_API, "xposed.hookAfter failed", e)
                     }
                     return Undefined.instance
                 }
@@ -1027,5 +1020,40 @@ object JsApiExposer {
         )
 
         ScriptableObject.putProperty(scope, "xposed", xposedObj)
+    }
+
+    private fun exposeTaskApis(scope: ScriptableObject) {
+        val taskObj = NativeObject()
+
+        ScriptableObject.putProperty(
+            taskObj, "run",
+            object : BaseFunction() {
+                override fun call(
+                    cx: Context,
+                    scope: Scriptable,
+                    thisObj: Scriptable,
+                    args: Array<Any?>
+                ): Any {
+                    val func = args.getOrNull(0) as? org.mozilla.javascript.Function
+                        ?: return Undefined.instance
+
+                    thread(name = "JsTaskThread") {
+                        val threadCx = Context.enter()
+                        try {
+                            val threadScope = threadCx.init()
+                            func.call(threadCx, threadScope, thisObj, emptyArray())
+                        } catch (e: Exception) {
+                            WeLogger.e(TAG, "task.run failed", e)
+                        } finally {
+                            Context.exit()
+                        }
+                    }
+
+                    return Undefined.instance
+                }
+            }
+        )
+
+        ScriptableObject.putProperty(scope, "task", taskObj)
     }
 }

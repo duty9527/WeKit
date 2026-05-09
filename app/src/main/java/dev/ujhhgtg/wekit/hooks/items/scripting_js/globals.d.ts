@@ -313,15 +313,22 @@ declare namespace wechat {
     // --- 其他 API ---
 
     /**
-     * 发送 CGI 请求
+     * 异步发送 CGI 请求
      * @param uri 请求的 URI
      * @param cgiId 请求的 CGI ID
      * @param funcId 请求的 Func ID
      * @param routeId 请求的 Route ID
      * @param jsonPayload JSON 负载字符串
-     * @returns 成功返回 JSON 字符串，失败返回错误信息字符串
+     * @param onSuccess 成功回调，接收 JSON 字符串
+     * @param onFailure 失败回调，接收错误信息字符串
+     * @example
+     * sendCgi("/cgi-bin/mmbiz-bin/xxx", 123, 0, 0, '{"key":"value"}', function(json) {
+     *   log.i("Success:", json);
+     * }, function(err) {
+     *   log.e("Failed:", err);
+     * });
      */
-    function sendCgi(uri: string, cgiId: number, funcId: number, routeId: number, jsonPayload: string): string;
+    function sendCgi(uri: string, cgiId: number, funcId: number, routeId: number, jsonPayload: string, onSuccess?: (json: string) => void, onFailure?: (errMsg: string) => void): void;
 
     /**
      * 获取当前用户的微信 ID
@@ -334,6 +341,19 @@ declare namespace wechat {
      * @returns 当前用户的微信号字符串
      */
     declare function getSelfCustomWxId(): string;
+}
+
+declare namespace task {
+    /**
+     * 在独立线程中执行一个函数，避免阻塞主脚本执行
+     * @param fn 要执行的函数。将在新线程的独立 JS 上下文中运行
+     * @example
+     * task.run(function() {
+     *   const resp = http.get("https://api.example.com/data");
+     *   log.i("Got response:", resp.body);
+     * });
+     */
+    function run(fn: () => void): void;
 }
 
 declare namespace xposed {
