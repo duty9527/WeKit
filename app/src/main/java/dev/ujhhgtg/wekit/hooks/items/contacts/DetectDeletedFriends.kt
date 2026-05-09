@@ -1,6 +1,7 @@
 package dev.ujhhgtg.wekit.hooks.items.contacts
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,7 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import dev.ujhhgtg.comptime.nameOf
+import androidx.compose.ui.Modifier
+import dev.ujhhgtg.comptime.This
 import dev.ujhhgtg.wekit.hooks.api.core.WeApi
 import dev.ujhhgtg.wekit.hooks.api.core.WeDatabaseApi
 import dev.ujhhgtg.wekit.hooks.api.net.WePacketHelper
@@ -39,11 +41,12 @@ object DetectDeletedFriends : ClickableHookItem() {
     override val noSwitchWidget: Boolean
         get() = true
 
-    private val TAG = nameOf(DetectDeletedFriends)
+    private val TAG = This.Class.simpleName
 
     private enum class AbnormalFriendStatus {
-        Blocked,
-        Deleted
+        ThatAccountBanned,
+        ThatBlockedThis,
+        ThatDeletedThis
     }
 
     private data class AbnormalFriend(
@@ -84,7 +87,7 @@ object DetectDeletedFriends : ClickableHookItem() {
                                 onSuccess { json, _ ->
                                     val jsonObj = Json.parseToJsonElement(json).jsonObject
                                     val realName = jsonObj["4"]
-                                    WeLogger.d("DetectDeletedFriends", "realName=$realName")
+                                    WeLogger.d(TAG, "realName=$realName")
                                     if (realName == null) {
                                         abnormalFriends += AbnormalFriend(
                                             nickname = friend.nickname,
@@ -92,7 +95,7 @@ object DetectDeletedFriends : ClickableHookItem() {
                                             wxId = friend.wxId,
                                             customWxId = friend.customWxId,
                                             // TODO: figure out status, might have to perform another request
-                                            status = AbnormalFriendStatus.Deleted,
+                                            status = AbnormalFriendStatus.ThatDeletedThis,
                                         )
                                     }
                                     (phase as DialogPhase.Scanning).completed.intValue++
@@ -133,10 +136,13 @@ object DetectDeletedFriends : ClickableHookItem() {
                             LazyColumn {
                                 items(abnormalFriends) { friend ->
                                     ListItem(
+                                        modifier = Modifier.clickable {
+                                            WeApi.openContact(context, friend.wxId, WeApi.OpenContactDestination.HOMEPAGE)
+                                        },
                                         headlineContent = { Text("${friend.nickname} (${friend.remarkName})") },
                                         supportingContent = {
                                             Column {
-                                                Text("状态: ${if (friend.status == AbnormalFriendStatus.Blocked) "被拉黑" else "被删除"}")
+                                                Text("状态: ${if (friend.status == AbnormalFriendStatus.ThatBlockedThis) "被拉黑" else "被删除"}")
                                                 Text("微信 ID: ${friend.wxId}")
                                                 Text("微信号: ${friend.customWxId}")
                                             }
