@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.security.keystore.KeyPermanentlyInvalidatedException
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.RequiresApi
@@ -39,22 +40,19 @@ import dev.ujhhgtg.wekit.ui.content.AlertDialogContent
 import dev.ujhhgtg.wekit.ui.content.Button
 import dev.ujhhgtg.wekit.ui.content.IconButton
 import dev.ujhhgtg.wekit.ui.content.TextButton
+import dev.ujhhgtg.wekit.ui.utils.findViewByChildIndexes
 import dev.ujhhgtg.wekit.ui.utils.findViewWhich
 import dev.ujhhgtg.wekit.ui.utils.findViewsWhich
 import dev.ujhhgtg.wekit.ui.utils.rootView
 import dev.ujhhgtg.wekit.ui.utils.showComposeDialog
 import dev.ujhhgtg.wekit.utils.CryptoManager
 import dev.ujhhgtg.wekit.utils.EncryptedData
+import dev.ujhhgtg.wekit.utils.HostInfo
 import dev.ujhhgtg.wekit.utils.TargetProcesses
 import dev.ujhhgtg.wekit.utils.WeLogger
 import dev.ujhhgtg.wekit.utils.android.showToast
-import dev.ujhhgtg.wekit.utils.debugViewTree
-import dev.ujhhgtg.wekit.utils.reflection.asResolver
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.milliseconds
+import dev.ujhhgtg.wekit.utils.reflection.resolve
+
 
 @HookItem(path = "红包与支付/指纹支付", description = "使用指纹快捷确认支付")
 object FingerprintPay : ClickableHookItem() {
@@ -74,85 +72,54 @@ object FingerprintPay : ClickableHookItem() {
     }
 
     override fun onEnable() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-
-        // FIXME: I REALLY HAVEN'T THE FOGGIEST IDEA OF WHY I HAVE TO DIVERGE THE CODE FOR THE TWO UIS
-        //        BUT IT! JUST! DOESN'T! WORK! IF! I! DON'T!
-        //        so here is it
-        //        i really have to figure out the cause and clean this up some other day
-        "${PackageNames.WECHAT}.framework.app.UIPageFragmentActivity".toClass().asResolver().firstMethod { name = "onResume" }.hookBefore {
-            if (isVerificationOngoing) return@hookBefore
-            isVerificationOngoing = true
-            WeLogger.d(TAG, "isVerificationOngoing = true")
-
-            val activity = thisObject as Activity
-
-            val root = activity.rootView
-            val myKeyboardWindow = root.findViewWhich<LinearLayout> { it is MyKeyboardWindow } ?: return@hookBefore
-            val digitViews = myKeyboardWindow.findViewsWhich<TextView> { it is TextView }
-            val orderedDigits = listOf(digitViews.last()) + digitViews.dropLast(1)
-
-            decryptAndClick(activity, orderedDigits, sleepTime = 20)
-        }
-
-        "${PackageNames.WECHAT}.plugin.lite.ui.WxaLiteAppTransparentLiteUI".toClass().asResolver().firstMethod { name = "onResume" }.hookAfter {
-            if (isVerificationOngoing) return@hookAfter
-            isVerificationOngoing = true
-            WeLogger.d(TAG, "isVerificationOngoing = true")
-
-            val activity = thisObject as Activity
-            val root = activity.rootView
-
-            CoroutineScope(Dispatchers.Main).launch {
-                delay(300.milliseconds)
-
-                var digitViews: List<TextView>
-                var attempts = 0
-
-                while (true) {
-                    val myKeyboardWindow = root.findViewWhich<LinearLayout> { it is MyKeyboardWindow }
-
-                    digitViews = myKeyboardWindow?.findViewsWhich { it is TextView } ?: emptyList()
-
-                    if (myKeyboardWindow == null || digitViews.isEmpty()) {
-                        debugViewTree(root)
-                        WeLogger.w(TAG, "failed to find myKeyboardWindow or digitViews is empty")
-                        attempts++
-
-                        if (attempts >= 10) {
-                            WeLogger.e(TAG, "failed to find myKeyboardWindow or digitViews - 10 attempts used, giving up")
-                            return@launch
-                        }
-
-                        delay(700.milliseconds)
-                        continue
-                    }
-
-                    WeLogger.d(TAG, "found myKeyboardWindow and digitViews")
-                    break
-                }
-
-                val orderedDigits = listOf(digitViews.last()) + digitViews.dropLast(1)
-                delay(300.milliseconds)
-
-                decryptAndClick(activity, orderedDigits, sleepTime = 50)
-            }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return
         }
 
         listOf(
             "${PackageNames.WECHAT}.framework.app.UIPageFragmentActivity",
             "${PackageNames.WECHAT}.plugin.lite.ui.WxaLiteAppTransparentLiteUI"
         ).forEach { className ->
-            className.toClass().asResolver()
-                // WxaLiteAppTransparentLiteUI inherits WxaLiteAppTransparentUI::finish()
-                .firstMethod { name = "finish"; superclass() }
-                .hookBefore {
-                    WeLogger.d(TAG, "isVerificationOngoing = false")
-                    isVerificationOngoing = false
+            className.toClass().resolve()
+                .apply {
+                    firstMethod { name = "onResume" }
+                        .hookBefore {
+                            if (isVerificationOngoing) return@hookBefore
+                            isVerificationOngoing = true
+
+                            val activity = thisObject as Activity
+
+                            val root = activity.rootView
+                            val searchedView = root.findViewByChildIndexes<ViewGroup>(0, 0, 2, 0, 2) ?: return@hookBefore
+                            val myKeyboardWindow = searchedView.findViewWhich<LinearLayout> { it is MyKeyboardWindow } ?: return@hookBefore
+                            val digitViews = myKeyboardWindow.findViewsWhich<TextView> { it is TextView }
+                            val orderedDigits = listOf(digitViews.last()) + digitViews.dropLast(1)
+
+                            val rawEncData = WePrefs.getString(KEY_ENCRYPTED_DATA) ?: run {
+                                showToast("支付密码未设置, 指纹支付不会生效!")
+                                return@hookBefore
+                            }
+                            val splitRawEncData = rawEncData.split(SPLIT_CHAR)
+                            val encData = EncryptedData(splitRawEncData[0], splitRawEncData[1])
+                            decryptWithBiometric(activity, encData) { plaintext ->
+                                showToast("支付密码解密成功!")
+                                for (char in plaintext) {
+                                    val digit = char.digitToInt()
+                                    orderedDigits[digit].performClick()
+                                    Thread.sleep(20)
+                                }
+                            }
+                        }
+
+                    // WxaLiteAppTransparentLiteUI inherits WxaLiteAppTransparentUI::finish()
+                    firstMethod { name = "finish"; superclass() }
+                        .hookBefore {
+                            isVerificationOngoing = false
+                        }
                 }
         }
 
-        FingerPrintAuthTransparentUI::class.hookBeforeOnCreate {
+        FingerPrintAuthTransparentUI::class.java.hookBeforeOnCreate {
             // hide 'enable fingerprint pay' guide dialog
             val bundle = args[0] as Bundle
             bundle.putBoolean("key_show_guide", false)
@@ -200,8 +167,8 @@ object FingerprintPay : ClickableHookItem() {
                         }
                         val splitRawEncData = rawEncData.split(SPLIT_CHAR)
                         val encData = EncryptedData(splitRawEncData[0], splitRawEncData[1])
-                        decryptWithBiometric(context, encData) { ctx, plaintext ->
-                            showToast(ctx, "支付密码解密成功! 内容: ${plaintext.first()}****${plaintext.last()}")
+                        decryptWithBiometric(context, encData) { plaintext ->
+                            showToast("支付密码解密成功! 内容: ${plaintext.first()}****${plaintext.last()}")
                         }
                     }) { Text("测试解密") }
                 },
@@ -283,7 +250,7 @@ object FingerprintPay : ClickableHookItem() {
 
     // --- DECRYPT ---
     @RequiresApi(Build.VERSION_CODES.R)
-    fun decryptWithBiometric(context: Context, encryptedData: EncryptedData, onSuccess: (FragmentActivity, String) -> Unit) {
+    fun decryptWithBiometric(context: Context, encryptedData: EncryptedData, onSuccess: (String) -> Unit) {
         val iv = android.util.Base64.decode(encryptedData.iv, android.util.Base64.DEFAULT)
         val cipher = try {
             CryptoManager.getDecryptCipher(iv)
@@ -302,27 +269,8 @@ object FingerprintPay : ClickableHookItem() {
                     return@buildPrompt
                 }
                 val plaintext = CryptoManager.decrypt(encryptedData, authorizedCipher)
-                onSuccess(this, plaintext)
+                onSuccess(plaintext)
             }.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.R)
-    private fun decryptAndClick(activity: Activity, orderedDigits: List<TextView>, sleepTime: Long) {
-        val rawEncData = WePrefs.getString(KEY_ENCRYPTED_DATA) ?: run {
-            showToast("支付密码未设置, 指纹支付不会生效!")
-            return
-        }
-        val (ciphertext, iv) = rawEncData.split(SPLIT_CHAR, limit = 2)
-        val encData = EncryptedData(ciphertext, iv)
-
-        decryptWithBiometric(activity, encData) { ctx, plaintext ->
-            showToast(ctx, "支付密码解密成功!")
-            for (char in plaintext) {
-                val digit = char.digitToInt()
-                orderedDigits[digit].performClick()
-                Thread.sleep(sleepTime)
-            }
         }
     }
 
