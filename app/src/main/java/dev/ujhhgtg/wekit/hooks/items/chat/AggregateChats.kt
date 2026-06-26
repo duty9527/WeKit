@@ -29,7 +29,6 @@ import dev.ujhhgtg.wekit.dexkit.dsl.dexClass
 import dev.ujhhgtg.wekit.dexkit.dsl.dexMethod
 import dev.ujhhgtg.wekit.hooks.api.core.WeDatabaseApi
 import dev.ujhhgtg.wekit.hooks.api.core.WeDatabaseListenerApi
-import dev.ujhhgtg.wekit.hooks.api.core.models.IWeContact
 import dev.ujhhgtg.wekit.hooks.api.ui.WeStartActivityApi
 import dev.ujhhgtg.wekit.hooks.core.ClickableHookItem
 import dev.ujhhgtg.wekit.hooks.core.HookItem
@@ -639,7 +638,7 @@ object AggregateChats : ClickableHookItem(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(),
-                title = { Text("聊天归拢") },
+                title = { Text("对话归拢") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         LazyColumn(
@@ -757,10 +756,14 @@ object AggregateChats : ClickableHookItem(),
         var members by remember(folder) { mutableStateOf(folder?.members?.toSet().orEmpty()) }
         var selectingMembers by remember { mutableStateOf(false) }
 
+        var hasAvatar by remember(folderId) {
+            mutableStateOf(CustomLocalFriendAvatars.avatarMap.containsKey(folderId))
+        }
+
         if (selectingMembers) {
             ContactsSelector(
                 title = "选择对话",
-                contacts = remember { allSelectableConversations() },
+                contacts = remember { WeDatabaseApi.getContacts() },
                 initialSelectedWxIds = members,
                 onDismiss = { selectingMembers = false },
                 onConfirm = {
@@ -797,9 +800,11 @@ object AggregateChats : ClickableHookItem(),
                             Text("选择对话")
                         }
 
-                        val hasAvatar = CustomLocalFriendAvatars.avatarMap.containsKey(folderId)
                         if (hasAvatar) {
-                            Button(onClick = { CustomLocalFriendAvatars.removeAvatar(folderId) }) {
+                            Button(onClick = {
+                                CustomLocalFriendAvatars.removeAvatar(folderId)
+                                hasAvatar = false
+                            }) {
                                 Text("清除头像")
                             }
                         }
@@ -831,16 +836,6 @@ object AggregateChats : ClickableHookItem(),
                 ) { Text("确定") }
             }
         )
-    }
-
-    private fun allSelectableConversations(): List<IWeContact> {
-        val friends = runCatching { WeDatabaseApi.getFriends() }
-            .onFailure { WeLogger.w(TAG, "failed to load friends", it) }
-            .getOrDefault(emptyList())
-        val groups = runCatching { WeDatabaseApi.getGroups() }
-            .onFailure { WeLogger.w(TAG, "failed to load groups", it) }
-            .getOrDefault(emptyList())
-        return friends + groups
     }
 
     private fun loadFolders(): List<ChatFolder> {

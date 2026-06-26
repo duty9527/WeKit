@@ -13,7 +13,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 object CryptoManager {
 
-    private const val KEY_ALIAS = "wekit_tee_key_v2"
+    private const val KEY_ALIAS = "wekit_tee_key"
     private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val GCM_TAG_LENGTH = 128
@@ -34,21 +34,36 @@ object CryptoManager {
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
-                .setUserAuthenticationRequired(true)
+                .setUserAuthenticationRequired(true) // Requires biometric/PIN
                 .setUserAuthenticationParameters(
-                    5,
+                    0, // 0 = auth required every use
                     KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
                 )
-                .setInvalidatedByBiometricEnrollment(true)
+                .setInvalidatedByBiometricEnrollment(true) // Invalidate if new biometric added
                 .build()
         )
         return keyGenerator.generateKey()
     }
 
+    // Call this BEFORE showing BiometricPrompt for encryption
     @RequiresApi(Build.VERSION_CODES.R)
-    fun encrypt(plaintext: String): EncryptedData {
+    fun getEncryptCipher(): Cipher {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey())
+        return cipher // cipher.iv must be stored alongside ciphertext
+    }
+
+    // Call this BEFORE showing BiometricPrompt for decryption
+    @RequiresApi(Build.VERSION_CODES.R)
+    fun getDecryptCipher(iv: ByteArray): Cipher {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), spec)
+        return cipher
+    }
+
+    // Called after biometric success with the authorized cipher
+    fun encrypt(plaintext: String, cipher: Cipher): EncryptedData {
         val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
         return EncryptedData(
             ciphertext = Base64.encodeToString(ciphertext, Base64.DEFAULT),
@@ -56,12 +71,7 @@ object CryptoManager {
         )
     }
 
-    @RequiresApi(Build.VERSION_CODES.R)
-    fun decrypt(encryptedData: EncryptedData): String {
-        val iv = Base64.decode(encryptedData.iv, Base64.DEFAULT)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), spec)
+    fun decrypt(encryptedData: EncryptedData, cipher: Cipher): String {
         val ciphertext = Base64.decode(encryptedData.ciphertext, Base64.DEFAULT)
         val plaintext = cipher.doFinal(ciphertext)
         return String(plaintext, Charsets.UTF_8)
