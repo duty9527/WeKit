@@ -495,11 +495,11 @@ object WeMomentsApi : ApiFeature(), IResolveDex {
         })
     }
 
-    fun sendImagesInUi(context: Context, mediaMd5s: List<String>) {
+    fun sendImagesInUi(context: Context, mediaMd5s: List<String>, text: String? = null) {
         context.startActivity(Intent {
             setClassName(PackageNames.WECHAT, MOMENTS_CLASS)
             putStringArrayListExtra("sns_kemdia_path_list", mediaMd5s.toCollection(ArrayList()))
-            putExtra("Kdescription", "")
+            putExtra("Kdescription", text ?: "")
         })
     }
 

@@ -148,7 +148,7 @@ object ReMoment : SwitchFeature(), WeMomentsContextMenuApi.IMenuItemsProvider {
         return runCatching {
             WeMomentsApi.methodGetSnsVideoPath.method.invoke(null, nativeMediaObj) as? String
         }.getOrElse {
-            WeLogger.i(TAG, "err", it)
+            WeLogger.e(TAG, "failed to get moment video path", it)
             null
         }
     }
@@ -166,7 +166,7 @@ object ReMoment : SwitchFeature(), WeMomentsContextMenuApi.IMenuItemsProvider {
                     return
                 }
 
-                WeMomentsApi.sendImagesInUi(activity, tempPaths)
+                WeMomentsApi.sendImagesInUi(activity, tempPaths, contentText)
             }
             15, 5 -> { // 视频
                 val videoPath = fetchVideoPath(data.nativeMediaList)

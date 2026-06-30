@@ -92,7 +92,7 @@ object AntiMessageRecall : ClickableFeature(), WeXmlParserApi.IAfterParseListene
                         .replace($$"$sender", senderName)
                         .replace($$"$sendTime", formatEpoch(createTime, timeFormat))
                         .replace($$"$recallTime", formatEpoch(System.currentTimeMillis(), timeFormat))
-                        .format($$"$content", content.stripWxId())
+                        .replace($$"$content", content.stripWxId())
                     WeMessageApi.createSimpleMsgInfoAndInsert(
                         MessageType.SYSTEM.code,
                         talker,
@@ -111,7 +111,7 @@ object AntiMessageRecall : ClickableFeature(), WeXmlParserApi.IAfterParseListene
             var patternInput by remember { mutableStateOf(pattern) }
             var timeFormatInput by remember { mutableStateOf(timeFormat) }
             AlertDialogContent(
-                title = { Text("阻止消息撤回 3") },
+                title = { Text("防撤回") },
                 text = {
                     DefaultColumn {
                         ListItem(

@@ -33,6 +33,21 @@ object WeContactLabelApi : ApiFeature(), IResolveDex {
     }
 
     /**
+     * `NetSceneAddContactLabel` (e.g. `e93.a` on 8.0.74). Anchored on the unique cgi path plus its
+     * single-`String` constructor, which takes the new label's name. On success the host persists
+     * the label (with a server-assigned id) into the `ContactLabel` table inside `onGYNetEnd`.
+     */
+    private val classNetSceneAddContactLabel by dexClass {
+        matcher {
+            usingEqStrings("/cgi-bin/micromsg-bin/addcontactlabel")
+            addMethod {
+                name = "<init>"
+                paramTypes(String::class.java)
+            }
+        }
+    }
+
+    /**
      * Get all contact labels.
      * @return List of ContactLabel sorted alphabetically by name
      */
@@ -162,6 +177,42 @@ object WeContactLabelApi : ApiFeature(), IResolveDex {
         }
 
         classContactLabelPb.setDescriptor(className)
+    }
+
+    /**
+     * Create a contact label by name, returning its label id once the server has assigned one.
+     *
+     * If a label with [labelName] already exists it is returned immediately. Otherwise the
+     * `addcontactlabel` netscene is dispatched; since dispatching is fire-and-forget and the host
+     * only writes the new label (with its server-assigned id) into the `ContactLabel` table once
+     * the response arrives, this polls the DB up to [timeoutMs] for the id to show up.
+     *
+     * Must be called off the main thread (it sleeps while polling).
+     *
+     * @return the label id, or null if creation could not be confirmed within [timeoutMs].
+     */
+    fun createLabel(labelName: String, timeoutMs: Long = 10_000): Int? {
+        getLabelIdByName(labelName)?.let { return it }
+
+        try {
+            WeLogger.i(TAG, "createLabel: name=$labelName")
+            val netSceneInstance = classNetSceneAddContactLabel.clazz.createInstance(labelName)
+            WeNetSceneApi.sendNetScene(netSceneInstance)
+        } catch (e: Exception) {
+            WeLogger.e(TAG, "createLabel failed to dispatch", e)
+            return null
+        }
+
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            getLabelIdByName(labelName)?.let {
+                WeLogger.i(TAG, "createLabel: name=$labelName resolved to id=$it")
+                return it
+            }
+            Thread.sleep(200)
+        }
+        WeLogger.w(TAG, "createLabel: name=$labelName not confirmed within ${timeoutMs}ms")
+        return null
     }
 
     /**

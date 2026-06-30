@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.composables.icons.materialsymbols.MaterialSymbols
+import com.composables.icons.materialsymbols.outlined.Add
 import com.composables.icons.materialsymbols.outlined.Delete
 import dev.ujhhgtg.comptime.This
 import dev.ujhhgtg.wekit.features.api.core.WeApi
@@ -39,6 +40,8 @@ import dev.ujhhgtg.wekit.ui.utils.showComposeDialog
 import dev.ujhhgtg.wekit.utils.WeLogger
 import dev.ujhhgtg.wekit.utils.android.copyToClipboard
 import dev.ujhhgtg.wekit.utils.android.showToast
+import dev.ujhhgtg.wekit.utils.android.showToastSuspend
+import dev.ujhhgtg.wekit.utils.formatEpoch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -73,7 +76,10 @@ object DetectDeletedFriends : ClickableFeature() {
             val abnormalFriends: MutableList<AbnormalFriend> = mutableListOf()
         ) : DialogPhase()
         data class Done(val friends: List<AbnormalFriend>) : DialogPhase()
-        data class SelectLabel(val friends: List<AbnormalFriend>) : DialogPhase()
+        data class SelectLabel(
+            val friends: List<AbnormalFriend>,
+            val suggestedLabelName: String
+        ) : DialogPhase()
         data class Marking(
             val friends: List<AbnormalFriend>,
             val labelName: String,
@@ -159,6 +165,19 @@ object DetectDeletedFriends : ClickableFeature() {
                     dialog.setCancelable(false)
                     CoroutineScope(Dispatchers.IO).launch {
                         val markingPhase = phase as DialogPhase.Marking
+                        // ensure the target label exists before tagging; createLabel is a no-op
+                        // when the label is already present, otherwise it dispatches the
+                        // addcontactlabel netscene and waits for the server-assigned id to land
+                        val labelId = WeContactLabelApi.createLabel(markingPhase.labelName)
+                        if (labelId == null) {
+                            if (phase is DialogPhase.Marking) {
+                                phase = DialogPhase.Done(markingPhase.friends)
+                                dialog.setCancelable(true)
+                                showToastSuspend(context, "创建标签「${markingPhase.labelName}」失败")
+                            }
+                            return@launch
+                        }
+
                         for (friend in markingPhase.friends) {
                             // detect whether user quitted halfway
                             if (phase !is DialogPhase.Marking) {
@@ -181,7 +200,7 @@ object DetectDeletedFriends : ClickableFeature() {
                         if (phase is DialogPhase.Marking) {
                             phase = DialogPhase.Done(markingPhase.friends)
                             dialog.setCancelable(true)
-                            showToast(context, "标记完成")
+                            showToastSuspend(context, "标记完成")
                         }
                     }
                 } else if (phase is DialogPhase.Deleting) {
@@ -212,7 +231,7 @@ object DetectDeletedFriends : ClickableFeature() {
                             val failedCount = synchronized(deletingPhase.failed) { deletingPhase.failed.size }
                             phase = DialogPhase.Done(remaining)
                             dialog.setCancelable(true)
-                            showToast(
+                            showToastSuspend(
                                 context,
                                 "删除完成: 成功 ${deleted.size}, 失败 $failedCount"
                             )
@@ -291,17 +310,39 @@ object DetectDeletedFriends : ClickableFeature() {
                         }
 
                         is DialogPhase.SelectLabel -> {
+                            val selectPhase = phase as DialogPhase.SelectLabel
                             val labels = availableLabels
                             DefaultColumn {
-                                Text("选择一个标签, 将应用到全部 ${(phase as DialogPhase.SelectLabel).friends.size} 个异常好友")
-                                when {
-                                    labels == null -> LinearWavyProgressIndicator()
-                                    labels.isEmpty() -> Text("没有可用的标签, 请先在微信中创建标签")
-                                    else -> LazyColumn {
+                                Text("选择一个标签, 将应用到全部 ${selectPhase.friends.size} 个异常好友")
+                                if (labels == null) {
+                                    LinearWavyProgressIndicator()
+                                } else {
+                                    LazyColumn {
+                                        // always offer creating a fresh, timestamped label
+                                        item {
+                                            ListItem(
+                                                modifier = Modifier.clickable {
+                                                    phase = DialogPhase.Marking(
+                                                        friends = selectPhase.friends,
+                                                        labelName = selectPhase.suggestedLabelName,
+                                                        completed = mutableIntStateOf(0),
+                                                        total = selectPhase.friends.size
+                                                    )
+                                                },
+                                                leadingContent = {
+                                                    Icon(
+                                                        MaterialSymbols.Outlined.Add,
+                                                        contentDescription = "新建标签",
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                },
+                                                headlineContent = { Text(selectPhase.suggestedLabelName) },
+                                                supportingContent = { Text("新建标签") }
+                                            )
+                                        }
                                         items(labels) { label ->
                                             ListItem(
                                                 modifier = Modifier.clickable {
-                                                    val selectPhase = phase as DialogPhase.SelectLabel
                                                     phase = DialogPhase.Marking(
                                                         friends = selectPhase.friends,
                                                         labelName = label.labelName,
@@ -403,7 +444,10 @@ object DetectDeletedFriends : ClickableFeature() {
                             if (abnormalFriends.isNotEmpty()) {
                                 TextButton(onClick = {
                                     availableLabels = null
-                                    phase = DialogPhase.SelectLabel(abnormalFriends)
+                                    phase = DialogPhase.SelectLabel(
+                                        friends = abnormalFriends,
+                                        suggestedLabelName = "WeKit_单删好友_${formatEpoch(System.currentTimeMillis(), includeDate = true)}"
+                                    )
                                 }) { Text("标记标签") }
                                 TextButton(onClick = {
                                     phase = DialogPhase.ConfirmDelete(

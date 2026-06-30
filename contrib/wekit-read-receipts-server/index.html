@@ -404,25 +404,25 @@
       <div class="controls">
         <div class="field-group">
           <input
-            id="uuidInput"
+            id="wxidInput"
             type="text"
-            data-i18n="filterUuid"
+            data-i18n="filterWxid"
             data-i18n-placeholder
-            placeholder="Filter by UUID..."
+            placeholder="Filter by wxId..."
           />
           <button
             class="btn btn-secondary"
-            onclick="loadByUuid()"
+            onclick="loadByWxid()"
             data-i18n="query"
           >
             Query
           </button>
           <button
             class="btn btn-outline btn-sm"
-            onclick="clearByUuid()"
+            onclick="clearByWxid()"
             data-i18n="delete"
             data-i18n-title="deleteTitle"
-            title="Delete records for this UUID"
+            title="Delete messages for this wxId"
           >
             Delete
           </button>
@@ -450,9 +450,9 @@
         <table>
           <thead>
             <tr>
-              <th data-i18n="uuid">UUID</th>
+              <th data-i18n="wxid">wxId</th>
               <th data-i18n="message">Message</th>
-              <th data-i18n="ip">IP</th>
+              <th data-i18n="reads">Reads</th>
               <th data-i18n="timestamp">Timestamp</th>
             </tr>
           </thead>
@@ -496,70 +496,70 @@
       const translations = {
         "zh-CN": {
           title: "已读追踪",
-          subtitle: "追踪像素统计",
+          subtitle: "已发送消息的已读人数",
           refresh: "刷新",
           clearAll: "清除",
-          filterUuid: "按 UUID 过滤...",
+          filterUuid: "按 wxId 过滤...",
           query: "查询",
           delete: "删除",
-          deleteTitle: "删除此 UUID 的所有回执",
+          deleteTitle: "删除此 wxId 的所有消息",
           filterMsg: "按消息内容过滤...",
-          uuid: "UUID",
+          wxid: "wxId",
           message: "消息",
-          ip: "IP",
+          reads: "已读人数",
           timestamp: "时间",
-          records: " 条记录",
+          records: " 条消息",
           confirm: "确认",
           cancel: "取消",
           clearAllTitle: "清除所有记录？",
-          clearAllBody: "这将永久删除数据库中的所有已读回执记录。",
-          clearUuidTitle: "清除此 UUID 的记录？",
-          clearUuidBody: '这将删除 UUID "{0}" 的所有回执记录。',
+          clearAllBody: "这将永久删除数据库中的所有已读追踪消息及其读取记录。",
+          clearUuidTitle: "清除此 wxId 的记录？",
+          clearUuidBody: '这将删除 wxId "{0}" 的所有消息及其读取记录。',
           loading: "加载中...",
-          noRecords: "暂无回执",
+          noRecords: "暂无消息",
           networkError: "网络错误",
           clearingAll: "正在清除所有记录…",
           clearedAll: "已清除所有记录",
           failedClear: "清除记录失败",
-          enterUuid: "请输入 UUID",
-          enterUuidDel: "请输入要删除的 UUID",
+          enterUuid: "请输入 wxId",
+          enterUuidDel: "请输入要删除的 wxId",
           clearingUuid: "正在清除 {0} 的记录…",
           clearedUuid: "已清除 {0} 的记录",
-          failedClearUuid: "清除 UUID 记录失败",
+          failedClearUuid: "清除 wxId 记录失败",
         },
         en: {
           title: "Read Receipts",
-          subtitle: "Tracking pixel hits",
+          subtitle: "Read counts of sent messages",
           refresh: "Refresh",
           clearAll: "Clear All",
-          filterUuid: "Filter by UUID...",
+          filterUuid: "Filter by wxId...",
           query: "Query",
           delete: "Delete",
-          deleteTitle: "Delete records for this UUID",
+          deleteTitle: "Delete messages for this wxId",
           filterMsg: "Filter by message text...",
-          uuid: "UUID",
+          wxid: "wxId",
           message: "Message",
-          ip: "IP",
+          reads: "Reads",
           timestamp: "Timestamp",
-          records: " records",
+          records: " messages",
           confirm: "Confirm",
           cancel: "Cancel",
           clearAllTitle: "Clear all records?",
           clearAllBody:
-            "This will permanently delete every read receipt from the database.",
-          clearUuidTitle: "Clear records for this UUID?",
-          clearUuidBody: 'This will delete all receipts for UUID "{0}".',
+            "This will permanently delete every tracked message and its reads from the database.",
+          clearUuidTitle: "Clear records for this wxId?",
+          clearUuidBody: 'This will delete all messages for wxId "{0}".',
           loading: "Loading...",
-          noRecords: "No receipts found",
+          noRecords: "No messages found",
           networkError: "Network error",
           clearingAll: "Clearing all records…",
           clearedAll: "All records cleared",
           failedClear: "Failed to clear records",
-          enterUuid: "Please enter a UUID",
-          enterUuidDel: "Enter a UUID to delete",
+          enterUuid: "Please enter a wxId",
+          enterUuidDel: "Enter a wxId to delete",
           clearingUuid: "Clearing records for {0}…",
           clearedUuid: "Records for {0} cleared",
-          failedClearUuid: "Failed to clear UUID records",
+          failedClearUuid: "Failed to clear wxId records",
         },
       };
 
@@ -633,9 +633,9 @@
         });
       }
 
-      function showClearUuidModal(uuid) {
-        showModal(t("clearUuidTitle"), t("clearUuidBody", uuid), () => {
-          deleteByUuid(uuid);
+      function showClearWxidModal(wxId) {
+        showModal(t("clearUuidTitle"), t("clearUuidBody", wxId), () => {
+          deleteByWxid(wxId);
         });
       }
 
@@ -650,17 +650,17 @@
       }
 
       async function loadAll() {
-        currentFilterUrl = buildUrl("/receipts");
+        currentFilterUrl = buildUrl("/messages");
         await fetchData(currentFilterUrl);
       }
 
-      async function loadByUuid() {
-        const uuid = document.getElementById("uuidInput").value.trim();
-        if (!uuid) {
+      async function loadByWxid() {
+        const wxId = document.getElementById("wxidInput").value.trim();
+        if (!wxId) {
           toast(t("enterUuid"), "error");
           return;
         }
-        currentFilterUrl = buildUrl("/receipts/" + encodeURIComponent(uuid));
+        currentFilterUrl = buildUrl("/messages/" + encodeURIComponent(wxId));
         await fetchData(currentFilterUrl);
       }
 
@@ -688,14 +688,13 @@
               "</td></tr>";
             return;
           }
-          await resolveRegions(data.map((r) => r.ip));
 
           tbody.innerHTML = data
             .map(
               (r) => `<tr>
-      <td class="uuid-col">${esc(r.uuid)}</td>
-      <td class="msg-col">${esc(r.msg)}</td>
-      <td class="ip-col">${esc(r.ip)}${fmtRegion(getRegion(r.ip))}</td>
+      <td class="uuid-col">${esc(r.wxId)}</td>
+      <td class="msg-col">${esc(r.content)}</td>
+      <td class="reads-col">${esc(r.reads)}</td>
       <td class="ts-col">${esc(r.timestamp)}</td>
     </tr>`,
             )
@@ -713,7 +712,7 @@
       async function deleteAll() {
         toast(t("clearingAll"), "info");
         try {
-          const res = await fetch("/receipts", { method: "DELETE" });
+          const res = await fetch("/messages", { method: "DELETE" });
           if (!res.ok) {
             toast(t("failedClear"), "error");
             return;
@@ -725,86 +724,29 @@
         }
       }
 
-      function clearByUuid() {
-        const uuid = document.getElementById("uuidInput").value.trim();
-        if (!uuid) {
+      function clearByWxid() {
+        const wxId = document.getElementById("wxidInput").value.trim();
+        if (!wxId) {
           toast(t("enterUuidDel"), "error");
           return;
         }
-        showClearUuidModal(uuid);
+        showClearWxidModal(wxId);
       }
 
-      async function deleteByUuid(uuid) {
-        toast(t("clearingUuid", uuid), "info");
+      async function deleteByWxid(wxId) {
+        toast(t("clearingUuid", wxId), "info");
         try {
-          const res = await fetch("/receipts/" + encodeURIComponent(uuid), {
+          const res = await fetch("/messages/" + encodeURIComponent(wxId), {
             method: "DELETE",
           });
           if (!res.ok) {
             toast(t("failedClearUuid"), "error");
             return;
           }
-          toast(t("clearedUuid", uuid), "success");
+          toast(t("clearedUuid", wxId), "success");
           await loadAll();
         } catch (e) {
           toast(t("networkError") + ": " + e.message, "error");
-        }
-      }
-
-      /* ── IP region lookup (via ip-api.com batch, cached) ── */
-      const regionCache = new Map();
-
-      function isPrivateIP(ip) {
-        const p = ip.split(".").map(Number);
-        if (p.length !== 4) return false;
-        return (
-          p[0] === 10 ||
-          p[0] === 127 ||
-          (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
-          (p[0] === 192 && p[1] === 168) ||
-          p[0] === 0
-        );
-      }
-
-      function getRegion(ip) {
-        if (regionCache.has(ip)) return regionCache.get(ip);
-        if (isPrivateIP(ip)) return "内网";
-        return "";
-      }
-
-      function fmtRegion(region) {
-        return region ? `<span class="ip-region"> (${esc(region)})</span>` : "";
-      }
-
-      async function resolveRegions(ips) {
-        const unique = [
-          ...new Set(
-            ips.filter((ip) => !regionCache.has(ip) && !isPrivateIP(ip)),
-          ),
-        ];
-        if (unique.length === 0) return;
-
-        try {
-          for (let i = 0; i < unique.length; i += 100) {
-            const chunk = unique.slice(i, i + 100);
-            const res = await fetch("http://ip-api.com/batch?lang=" + lang, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(
-                chunk.map((ip) => ({ query: ip, fields: "query,regionName" })),
-              ),
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const results = await res.json();
-            for (const r of results) {
-              regionCache.set(r.query, r.regionName || "");
-            }
-          }
-        } catch (e) {
-          // Mark uncached IPs as empty so we don't retry
-          for (const ip of unique) {
-            if (!regionCache.has(ip)) regionCache.set(ip, "");
-          }
         }
       }
 
@@ -817,8 +759,8 @@
       }
 
       /* ── keyboard ── */
-      document.getElementById("uuidInput").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") loadByUuid();
+      document.getElementById("wxidInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") loadByWxid();
       });
       document.getElementById("msgFilter").addEventListener("input", () => {
         loadAll();
