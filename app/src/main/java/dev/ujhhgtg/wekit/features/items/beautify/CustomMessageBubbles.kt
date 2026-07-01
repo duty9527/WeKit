@@ -5,10 +5,7 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.NinePatchDrawable
 import android.graphics.drawable.StateListDrawable
 import android.view.View
@@ -35,7 +32,6 @@ import androidx.core.graphics.toColorInt
 import com.tencent.mm.ui.base.AnimImageView
 import com.tencent.mm.ui.widget.MMNeat7extView
 import de.robv.android.xposed.XC_MethodHook
-import dev.ujhhgtg.reflekt.firstMethod
 import dev.ujhhgtg.wekit.activity.TransparentActivity
 import dev.ujhhgtg.wekit.features.api.core.models.MessageType
 import dev.ujhhgtg.wekit.features.api.ui.WeChatMessageViewApi
@@ -80,7 +76,7 @@ object CustomMessageBubbles : ClickableFeature(), WeChatMessageViewApi.ICreateVi
 
     override fun onEnable() {
         colorParseErrorToasted = false
-        hookVoiceIconTint()
+//        hookVoiceIconTint()
         WeChatMessageViewApi.addListener(this)
     }
 
@@ -96,16 +92,16 @@ object CustomMessageBubbles : ClickableFeature(), WeChatMessageViewApi.ICreateVi
      * and overwrite the filter on every drawable it receives, using the per-message color we stash
      * on the view as [ICON_TINT_TAG] during bind.
      */
-    private fun hookVoiceIconTint() {
-        TextView::class
-            .firstMethod { name = "setCompoundDrawablesWithIntrinsicBounds"; parameterCount = 4 }
-            .hookAfter {
-                if (thisObject !is AnimImageView) return@hookAfter
-                val view = thisObject as? AnimImageView ?: return@hookAfter
-                val color = view.getTag(ICON_TINT_TAG) as? Int ?: return@hookAfter
-                args.forEach { applyIconColorFilter(it as? Drawable, color) }
-            }
-    }
+//    private fun hookVoiceIconTint() {
+//        TextView::class
+//            .firstMethod { name = "setCompoundDrawablesWithIntrinsicBounds"; parameterCount = 4 }
+//            .hookAfter {
+//                if (thisObject !is AnimImageView) return@hookAfter
+//                val view = thisObject as? AnimImageView ?: return@hookAfter
+//                val color = view.getTag(ICON_TINT_TAG) as? Int ?: return@hookAfter
+//                args.forEach { applyIconColorFilter(it as? Drawable, color) }
+//            }
+//    }
 
     private var thatLight by prefOption("custom_bubbles_color_that_light", "black")
     private var thatDark by prefOption("custom_bubbles_color_that_dark", "white")
@@ -198,21 +194,21 @@ object CustomMessageBubbles : ClickableFeature(), WeChatMessageViewApi.ICreateVi
                             && (0 until v.childCount).any { hasBubbleTag(v.getChildAt(it)) }
                             && (0 until v.childCount).any { v.getChildAt(it) is AnimImageView }
                 }
-//                container.findViewsWhich<TextView> { it is TextView }
-//                    .forEach { applyForegroundColor(it, msgInfo.isSelfSender) }
+                container.findViewsWhich<TextView> { it is TextView }
+                    .forEach { applyForegroundColor(it, msgInfo.isSelfSender) }
 
                 // The play icon is a compound drawable, not text, so setTextColor never touches it.
                 // Its frames are built via uk.e() which bakes in a PorterDuff color filter, so a tint
                 // list can't override them either. Overwrite the filter directly. The idle icon sits
                 // on the static bubble now; the playing frames get swapped onto the AnimImageView on
                 // click, so we stash the color as a tag and let hookVoiceIconTint() re-apply it then.
-                val iconColor = getForegroundColor(view.context, msgInfo.isSelfSender)
-                if (iconColor != -1) {
-                    container.findViewsWhich<TextView> { it is TextView }.forEach { tv ->
-                        if (tv is AnimImageView) tv.setTag(ICON_TINT_TAG, iconColor)
-                        tv.compoundDrawables.forEach { applyIconColorFilter(it, iconColor) }
-                    }
-                }
+//                val iconColor = getForegroundColor(view.context, msgInfo.isSelfSender)
+//                if (iconColor != -1) {
+//                    container.findViewsWhich<TextView> { it is TextView }.forEach { tv ->
+//                        if (tv is AnimImageView) tv.setTag(ICON_TINT_TAG, iconColor)
+//                        tv.compoundDrawables.forEach { applyIconColorFilter(it, iconColor) }
+//                    }
+//                }
             }
 
             else -> {}
@@ -364,9 +360,9 @@ object CustomMessageBubbles : ClickableFeature(), WeChatMessageViewApi.ICreateVi
      * drawable state isn't affected. Used for the voice play icon, whose frames are built via
      * uk.e() with a baked-in PorterDuff filter that a View-level tint list cannot override.
      */
-    private fun applyIconColorFilter(drawable: Drawable?, color: Int) {
-        drawable?.mutate()?.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP)
-    }
+//    private fun applyIconColorFilter(drawable: Drawable?, color: Int) {
+//        drawable?.mutate()?.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP)
+//    }
 
     /**
      * Launches a system image picker and copies the chosen file's raw bytes into [fileName] under
