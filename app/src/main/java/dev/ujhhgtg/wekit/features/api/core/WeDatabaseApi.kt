@@ -128,7 +128,6 @@ object WeDatabaseApi : ApiFeature(), IResolveDex {
             SELECT $CONTACT_FIELDS, r.type
             FROM rcontact r
             $LEFT_JOIN_IMG_FLAG
-            WHERE r.verifyFlag = 0
         """.trimIndent()
 
         /** 好友列表（排除群聊和公众号和系统账号和自己和假好友） */
