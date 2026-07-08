@@ -121,6 +121,31 @@ pub extern "C" fn Java_dev_ujhhgtg_wekit_utils_AudioUtils_mp3ToSilk(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn Java_dev_ujhhgtg_wekit_utils_AudioUtils_wavToSilk(
+    env: *mut RawJNIEnv,
+    _thiz: jobject,
+    wav_path: jstring,
+    silk_path: jstring,
+) -> jboolean {
+    logi!("converting wav to silk...");
+    with_jstring(env, wav_path, |wav| {
+        with_jstring(env, silk_path, |silk| {
+            logi!("converting {} to {}", wav, silk);
+            match audio_utils::wav_to_silk(wav, silk) {
+                Ok(_) => {
+                    logi!("wav_to_silk succeeded");
+                    JNI_TRUE
+                }
+                Err(err) => {
+                    logi!("wav_to_silk failed: {:?}", err);
+                    JNI_FALSE
+                }
+            }
+        })
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_dev_ujhhgtg_wekit_utils_AudioUtils_silkToPcm(
     env: *mut RawJNIEnv,
     _thiz: jobject,

@@ -30,3 +30,5 @@ local.properties
 /build-logic/convention/build/
 
 /decrypted_wechat.db
+/app/src/main/java/nuke/data/cipher/NativeCrypto.kt
+/app/src/main/java/dev/ujhhgtg/wekit/features/items/debug/Experiments2.kt

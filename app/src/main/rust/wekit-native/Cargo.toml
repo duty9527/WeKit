@@ -17,6 +17,7 @@ symphonia = { version = "0.6", features = [
     "aac",
     "isomp4",
     "pcm",
+    "wav",
 ], default-features = false }
 mp3lame-encoder = "0.2"
 anyhow = "1"

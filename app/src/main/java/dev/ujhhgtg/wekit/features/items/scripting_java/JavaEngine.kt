@@ -262,6 +262,11 @@ object JavaEngine {
                 AudioUtils.mp3ToSilk(it[0] as String, it[1] as String)
             })
             setMethod(BshMethod(
+                "wavToSilk", arrayOf(BString, BString)
+            ) {
+                AudioUtils.wavToSilk(it[0] as String, it[1] as String)
+            })
+            setMethod(BshMethod(
                 "silkToMp3", arrayOf(BString, BString, int)
             ) {
                 val pcm = it[1] as String + ".tmp"
