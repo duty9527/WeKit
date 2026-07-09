@@ -16,6 +16,7 @@ import dev.ujhhgtg.wekit.dexkit.dsl.dexMethod
 import dev.ujhhgtg.wekit.features.core.ApiFeature
 import dev.ujhhgtg.wekit.features.core.Feature
 import dev.ujhhgtg.wekit.utils.WeLogger
+import dev.ujhhgtg.wekit.utils.android.runOnUiThread
 import dev.ujhhgtg.wekit.utils.hookBeforeDirectly
 import dev.ujhhgtg.wekit.utils.reflection.BBool
 import dev.ujhhgtg.wekit.utils.reflection.BInt
@@ -150,7 +151,9 @@ object WeHomeScreenPopupMenuApi : ApiFeature(), IResolveDex {
                             classMenuItemWrapper.clazz.createInstance(itemData)
                         items.put(items.size, itemWrapper)
 
-                        baseAdapter.notifyDataSetChanged()
+                        runOnUiThread {
+                            baseAdapter.notifyDataSetChanged()
+                        }
                     }
                 } catch (ex: Exception) {
                     WeLogger.e(
@@ -161,7 +164,9 @@ object WeHomeScreenPopupMenuApi : ApiFeature(), IResolveDex {
                 }
             }
 
-            baseAdapter.notifyDataSetChanged()
+            runOnUiThread {
+                baseAdapter.notifyDataSetChanged()
+            }
         }
 
         methodHandleItemClick.hookBefore {

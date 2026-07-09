@@ -36,6 +36,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
+import androidx.core.view.isVisible
 import de.robv.android.xposed.XC_MethodHook
 import dev.ujhhgtg.reflekt.reflekt
 import dev.ujhhgtg.wekit.features.api.core.models.MessageInfo
@@ -72,6 +73,7 @@ object MessageTimeEnhancements : ClickableFeature(),
     private var textSize by prefOption("msg_time_text_size", 10)
     private var displayFormat by prefOption("msg_time_display_format", $$"$time | $type")
     private var isAlwaysCentered by prefOption("msg_time_always_centered", false)
+    private var isAlwaysVisible by prefOption("msg_time_always_visible", false)
     private var textColorLight by prefOption("msg_time_color_light", "gray")
     private var textColorDark by prefOption("msg_time_color_dark", "gray")
 
@@ -156,7 +158,13 @@ object MessageTimeEnhancements : ClickableFeature(),
 
         val context = time.context
 
-        time.visibility = View.VISIBLE
+        if (isAlwaysVisible) {
+            time.visibility = View.VISIBLE
+        }
+        else {
+            if (!time.isVisible) return
+        }
+
         time.text = text
 
         // Dynamic text color configuration based on system theme
